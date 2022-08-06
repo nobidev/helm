@@ -107,6 +107,8 @@ func LoadFiles(files []*BufferedFile) (*chart.Chart, error) {
 			if err := yaml.Unmarshal(f.Data, &c.Values); err != nil {
 				return c, errors.Wrap(err, "cannot load values.yaml")
 			}
+		case f.Name == "values.tpl":
+			c.TemplateValues = &chart.File{Name: f.Name, Data: f.Data}
 		case f.Name == "values.schema.json":
 			c.Schema = f.Data
 
