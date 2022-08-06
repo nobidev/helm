@@ -21,7 +21,10 @@ import (
 	"io"
 	"io/ioutil"
 	"strings"
+	"text/template"
 
+	"github.com/Masterminds/sprig/v3"
+	"github.com/mitchellh/copystructure"
 	"github.com/pkg/errors"
 	"sigs.k8s.io/yaml"
 
@@ -82,6 +85,15 @@ func (v Values) Encode(w io.Writer) error {
 	}
 	_, err = w.Write(out)
 	return err
+}
+
+// Clone values
+func (v Values) MustClone() Values {
+	r, err := copystructure.Copy(v)
+	if err != nil {
+		panic(err)
+	}
+	return r.(Values)
 }
 
 func tableLookup(v Values, simple string) (Values, error) {
@@ -156,6 +168,12 @@ func ToRenderValues(chrt *chart.Chart, chrtVals map[string]interface{}, options 
 		return top, err
 	}
 
+	if v, err := applyTemplateValues(chrt, top, vals); err == nil {
+		vals = v
+	} else {
+		return nil, errors.Wrapf(err, "cannot load %s: %s", chrt.TemplateValues.Name, err.Error())
+	}
+
 	if err := ValidateAgainstSchema(chrt, vals); err != nil {
 		errFmt := "values don't meet the specifications of the schema(s) in the following chart(s):\n%s"
 		return top, fmt.Errorf(errFmt, err.Error())
@@ -210,3 +228,54 @@ func (v Values) pathValue(path []string) (interface{}, error) {
 func parsePath(key string) []string { return strings.Split(key, ".") }
 
 func joinPath(path ...string) string { return strings.Join(path, ".") }
+
+func buildContext(cxt Values, chrt *chart.Chart) Values {
+	if rv, err := cxt.Table("Release"); err == nil {
+		rv = rv.MustClone()
+		rv["Name"] = chrt.FullName()
+		return Values{
+			"Chart":        chrt.Metadata,
+			"Capabilities": cxt["Capabilities"],
+			"Release":      rv,
+		}
+	}
+	return nil
+}
+
+func applyTemplateValues(chrt *chart.Chart, cxt Values, vals Values) (Values, error) {
+	for _, item := range chrt.Dependencies() {
+		if vls, err := vals.Table(item.Name()); err == nil {
+			if v, err := applyTemplateValues(item, buildContext(cxt, item), vls); err == nil {
+				vals[item.Name()] = v.AsMap()
+			} else {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
+	}
+	if chrt.TemplateValues != nil {
+		t := template.New("gotpl")
+		t.Funcs(sprig.TxtFuncMap())
+
+		if _, err := t.New(chrt.TemplateValues.Name).Parse(string(chrt.TemplateValues.Data)); err != nil {
+			return nil, err
+		}
+		v, err := copystructure.Copy(cxt)
+		if err != nil {
+			return nil, err
+		}
+		topCopy := v.(Values)
+		topCopy["Values"] = vals.AsMap()
+		var buffer strings.Builder
+		if err := t.ExecuteTemplate(&buffer, chrt.TemplateValues.Name, topCopy); err != nil {
+			return nil, err
+		}
+		var overrideVals Values
+		if err := yaml.UnmarshalStrict([]byte(buffer.String()), &overrideVals); err != nil {
+			return nil, errors.Wrapf(err, "cannot load %s", chrt.TemplateValues.Name)
+		}
+		return CoalesceTables(overrideVals, vals), nil
+	}
+	return vals, nil
+}

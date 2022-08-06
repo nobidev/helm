@@ -46,6 +46,8 @@ type Chart struct {
 	Templates []*File `json:"templates"`
 	// Values are default config for this chart.
 	Values map[string]interface{} `json:"values"`
+	// Template values is values that will be merged with default values to create to final values for this chart.
+	TemplateValues *File `json:"-"`
 	// Schema is an optional JSON schema for imposing structure on Values
 	Schema []byte `json:"schema"`
 	// Files are miscellaneous files in a chart archive,
@@ -77,6 +79,14 @@ func (ch *Chart) Name() string {
 		return ""
 	}
 	return ch.Metadata.Name
+}
+
+// FullName returns the full name to this chart.
+func (ch *Chart) FullName() string {
+	if !ch.IsRoot() {
+		return ch.Parent().FullName() + "-" + ch.Name()
+	}
+	return ch.Name()
 }
 
 // AddDependency determines if the chart is a subchart.
