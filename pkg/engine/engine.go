@@ -42,6 +42,8 @@ type Engine struct {
 	LintMode bool
 	// the rest config to connect to the kubernetes api
 	config *rest.Config
+	// Key-Value storage
+	kv map[string]interface{}
 }
 
 // Render takes a chart, optional values, and value overrides, and attempts to render the Go templates.
@@ -107,6 +109,10 @@ func warnWrap(warn string) string {
 func (e Engine) initFunMap(t *template.Template, referenceTpls map[string]renderable) {
 	funcMap := funcMap()
 	includedNames := make(map[string]int)
+
+	if e.kv == nil {
+		e.kv = make(map[string]interface{})
+	}
 
 	// Add the 'include' function here so we can close over t.
 	funcMap["include"] = func(name string, data interface{}) (string, error) {
@@ -181,6 +187,17 @@ func (e Engine) initFunMap(t *template.Template, referenceTpls map[string]render
 			return "", nil
 		}
 		return "", errors.New(warnWrap(msg))
+	}
+
+	// KV Storage get
+	funcMap["kv_get"] = func(key string) (interface{}, error) {
+		return e.kv[key], nil
+	}
+
+	// KV Storage set
+	funcMap["kv_set"] = func(key string, value interface{}) (interface{}, error) {
+		e.kv[key] = value
+		return nil, nil
 	}
 
 	// If we are not linting and have a cluster connection, provide a Kubernetes-backed

@@ -49,6 +49,8 @@ type BuildInfo struct {
 	GitTreeState string `json:"git_tree_state,omitempty"`
 	// GoVersion is the version of the Go compiler used.
 	GoVersion string `json:"go_version,omitempty"`
+	// Support Key-Value storage
+	SupportKV bool `json:"support_kv,omitempty"`
 }
 
 // GetVersion returns the semver string of the version
@@ -71,6 +73,7 @@ func Get() BuildInfo {
 		GitCommit:    gitCommit,
 		GitTreeState: gitTreeState,
 		GoVersion:    runtime.Version(),
+		SupportKV:    true,
 	}
 
 	// HACK(bacongobbler): strip out GoVersion during a test run for consistent test output
