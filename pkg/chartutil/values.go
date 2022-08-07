@@ -21,7 +21,10 @@ import (
 	"io"
 	"io/ioutil"
 	"strings"
+	"text/template"
 
+	"github.com/Masterminds/sprig/v3"
+	"github.com/mitchellh/copystructure"
 	"github.com/pkg/errors"
 	"sigs.k8s.io/yaml"
 
@@ -154,6 +157,30 @@ func ToRenderValues(chrt *chart.Chart, chrtVals map[string]interface{}, options 
 	vals, err := CoalesceValues(chrt, chrtVals)
 	if err != nil {
 		return top, err
+	}
+
+	if chrt.TemplateValues != nil {
+		t := template.New("gotpl")
+		t.Funcs(sprig.TxtFuncMap())
+
+		if _, err := t.New(chrt.TemplateValues.Name).Parse(string(chrt.TemplateValues.Data)); err != nil {
+			return nil, err
+		}
+		v, err := copystructure.Copy(top)
+		if err != nil {
+			return nil, err
+		}
+		topCopy := v.(map[string]interface{})
+		topCopy["Values"] = vals
+		var buffer strings.Builder
+		if err := t.ExecuteTemplate(&buffer, chrt.TemplateValues.Name, topCopy); err != nil {
+			return nil, err
+		}
+		var overrideVals map[string]interface{}
+		if err := yaml.UnmarshalStrict([]byte(buffer.String()), &overrideVals); err != nil {
+			return nil, errors.Wrapf(err, "cannot load %s", chrt.TemplateValues.Name)
+		}
+		vals = CoalesceTables(overrideVals, vals)
 	}
 
 	if err := ValidateAgainstSchema(chrt, vals); err != nil {

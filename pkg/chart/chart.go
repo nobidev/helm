@@ -46,6 +46,8 @@ type Chart struct {
 	Templates []*File `json:"templates"`
 	// Values are default config for this chart.
 	Values map[string]interface{} `json:"values"`
+	// Template values is values that will be merged with default values to create to final values for this chart.
+	TemplateValues *File `json:"-"`
 	// Schema is an optional JSON schema for imposing structure on Values
 	Schema []byte `json:"schema"`
 	// Files are miscellaneous files in a chart archive,
