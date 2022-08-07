@@ -109,6 +109,7 @@ func warnWrap(warn string) string {
 func (e Engine) initFunMap(t *template.Template, referenceTpls map[string]renderable) {
 	funcMap := funcMap()
 	includedNames := make(map[string]int)
+	freezeNames := make(map[string]interface{})
 
 	// Add the 'include' function here so we can close over t.
 	funcMap["include"] = func(name string, data interface{}) (string, error) {
@@ -120,6 +121,14 @@ func (e Engine) initFunMap(t *template.Template, referenceTpls map[string]render
 			includedNames[name]++
 		} else {
 			includedNames[name] = 1
+		}
+		if v, ok := freezeNames[name]; ok {
+			if v != nil {
+				return v.(string), nil
+			}
+			defer func() {
+				freezeNames[name] = buf.String()
+			}()
 		}
 		err := t.ExecuteTemplate(&buf, name, data)
 		includedNames[name]--
@@ -200,6 +209,17 @@ func (e Engine) initFunMap(t *template.Template, referenceTpls map[string]render
 		}
 		e.kv[key] = value
 		return nil, nil
+	}
+
+	// Freeze define
+	funcMap["freeze_define"] = func(key string) (interface{}, error) {
+		freezeNames[key] = nil
+		return nil, nil
+	}
+
+	// Is freezed
+	funcMap["is_freezed"] = func(key string) (interface{}, error) {
+		return freezeNames[key] != nil, nil
 	}
 
 	// If we are not linting and have a cluster connection, provide a Kubernetes-backed
