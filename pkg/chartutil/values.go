@@ -168,7 +168,7 @@ func ToRenderValues(chrt *chart.Chart, chrtVals map[string]interface{}, options 
 		}
 		v, err := copystructure.Copy(top)
 		if err != nil {
-			return vals, err
+			return nil, err
 		}
 		topCopy := v.(map[string]interface{})
 		topCopy["Values"] = vals
@@ -176,9 +176,11 @@ func ToRenderValues(chrt *chart.Chart, chrtVals map[string]interface{}, options 
 		if err := t.ExecuteTemplate(&buffer, chrt.TemplateValues.Name, topCopy); err != nil {
 			return nil, err
 		}
-		if err := yaml.UnmarshalStrict([]byte(buffer.String()), &vals); err != nil {
+		var overrideVals map[string]interface{}
+		if err := yaml.UnmarshalStrict([]byte(buffer.String()), &overrideVals); err != nil {
 			return nil, errors.Wrapf(err, "cannot load %s", chrt.TemplateValues.Name)
 		}
+		vals = CoalesceTables(overrideVals, vals)
 	}
 
 	if err := ValidateAgainstSchema(chrt, vals); err != nil {
