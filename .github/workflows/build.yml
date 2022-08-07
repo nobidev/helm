@@ -1,0 +1,36 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Build
+        run: |
+          docker build -t ${{ github.repository }} .
+          mkdir -p bin
+          docker run -v $(pwd)/bin:/export ${{ github.repository }} cp helm /export/
+
+      - name: Commit
+        run: |
+          git config user.name "$(git log -1 --pretty=format:'%an')"
+          git config user.email "$(git log -1 --pretty=format:'%ae')"
+          git checkout --orphan release
+          git reset
+          for item in $(find bin/ -maxdepth 1 -type f -executable); do
+            mv ${item} ./
+            git add $(basename ${item})
+          done
+          git commit -m Release
+          git push origin release -f
