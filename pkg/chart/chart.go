@@ -81,6 +81,14 @@ func (ch *Chart) Name() string {
 	return ch.Metadata.Name
 }
 
+// FullName returns the full name to this chart.
+func (ch *Chart) FullName() string {
+	if !ch.IsRoot() {
+		return ch.Parent().FullName() + "-" + ch.Name()
+	}
+	return ch.Name()
+}
+
 // AddDependency determines if the chart is a subchart.
 func (ch *Chart) AddDependency(charts ...*Chart) {
 	for i, x := range charts {
