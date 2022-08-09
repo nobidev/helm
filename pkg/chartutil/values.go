@@ -87,6 +87,15 @@ func (v Values) Encode(w io.Writer) error {
 	return err
 }
 
+// Clone values
+func (v Values) MustClone() Values {
+	r, err := copystructure.Copy(v)
+	if err != nil {
+		panic(err)
+	}
+	return r.(Values)
+}
+
 func tableLookup(v Values, simple string) (Values, error) {
 	v2, ok := v[simple]
 	if !ok {
@@ -159,8 +168,9 @@ func ToRenderValues(chrt *chart.Chart, chrtVals map[string]interface{}, options 
 		return top, err
 	}
 
-	if v, err := applyTemplateValues(chrt, top, vals); err != nil {
+	if v, err := applyTemplateValues(chrt, top, vals); err == nil {
 		vals = v
+	} else {
 		return nil, errors.Wrapf(err, "cannot load %s: %s", chrt.TemplateValues.Name, err.Error())
 	}
 
@@ -219,10 +229,11 @@ func parsePath(key string) []string { return strings.Split(key, ".") }
 
 func joinPath(path ...string) string { return strings.Join(path, ".") }
 
-func buildContext(cxt map[string]interface{}, chrt *chart.Chart) map[string]interface{} {
-	if rv, err := copystructure.Copy(cxt["Release"]); err == nil {
-		rv.(map[string]interface{})["Name"] = chrt.FullName()
-		return map[string]interface{}{
+func buildContext(cxt Values, chrt *chart.Chart) Values {
+	if rv, err := cxt.Table("Release"); err == nil {
+		rv = rv.MustClone()
+		rv["Name"] = chrt.FullName()
+		return Values{
 			"Chart":        chrt.Metadata,
 			"Capabilities": cxt["Capabilities"],
 			"Release":      rv,
@@ -231,10 +242,14 @@ func buildContext(cxt map[string]interface{}, chrt *chart.Chart) map[string]inte
 	return nil
 }
 
-func applyTemplateValues(chrt *chart.Chart, cxt map[string]interface{}, vals map[string]interface{}) (map[string]interface{}, error) {
+func applyTemplateValues(chrt *chart.Chart, cxt Values, vals Values) (Values, error) {
 	for _, item := range chrt.Dependencies() {
-		if v, err := applyTemplateValues(item, buildContext(cxt, item), vals[item.Name()].(map[string]interface{})); err == nil {
-			vals[item.Name()] = v
+		if vls, err := vals.Table(item.Name()); err == nil {
+			if v, err := applyTemplateValues(item, buildContext(cxt, item), vls); err == nil {
+				vals[item.Name()] = v.AsMap()
+			} else {
+				return nil, err
+			}
 		} else {
 			return nil, err
 		}
@@ -250,13 +265,13 @@ func applyTemplateValues(chrt *chart.Chart, cxt map[string]interface{}, vals map
 		if err != nil {
 			return nil, err
 		}
-		topCopy := v.(map[string]interface{})
-		topCopy["Values"] = vals
+		topCopy := v.(Values)
+		topCopy["Values"] = vals.AsMap()
 		var buffer strings.Builder
 		if err := t.ExecuteTemplate(&buffer, chrt.TemplateValues.Name, topCopy); err != nil {
 			return nil, err
 		}
-		var overrideVals map[string]interface{}
+		var overrideVals Values
 		if err := yaml.UnmarshalStrict([]byte(buffer.String()), &overrideVals); err != nil {
 			return nil, errors.Wrapf(err, "cannot load %s", chrt.TemplateValues.Name)
 		}
