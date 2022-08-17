@@ -200,6 +200,18 @@ func (e Engine) initFunMap(t *template.Template, referenceTpls map[string]render
 		return e.kv[key], nil
 	}
 
+	// Regex All Submatch
+	funcMap["regexSubmatchAll"] = func(regex string, s string, n int) (interface{}, error) {
+		r := regexp.MustCompile(regex)
+		return r.FindAllStringSubmatch(s, n), nil
+	}
+
+	// Regex Submatch
+	funcMap["regexSubmatch"] = func(regex string, s string) (interface{}, error) {
+		r := regexp.MustCompile(regex)
+		return r.FindStringSubmatch(s), nil
+	}
+
 	// If we are not linting and have a cluster connection, provide a Kubernetes-backed
 	// implementation.
 	if !e.LintMode && e.config != nil {
