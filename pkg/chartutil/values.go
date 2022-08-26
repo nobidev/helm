@@ -155,6 +155,7 @@ func ToRenderValues(chrt *chart.Chart, chrtVals map[string]interface{}, options 
 		"Capabilities": caps,
 		"Release": map[string]interface{}{
 			"Name":      options.Name,
+			"FullName":  chrt.FullName(),
 			"Namespace": options.Namespace,
 			"IsUpgrade": options.IsUpgrade,
 			"IsInstall": options.IsInstall,
@@ -232,7 +233,8 @@ func joinPath(path ...string) string { return strings.Join(path, ".") }
 func buildContext(cxt Values, chrt *chart.Chart) Values {
 	if rv, err := cxt.Table("Release"); err == nil {
 		rv = rv.MustClone()
-		rv["Name"] = chrt.FullName()
+		rv["Name"] = chrt.Name()
+		rv["FullName"] = chrt.FullName()
 		return Values{
 			"Chart":        chrt.Metadata,
 			"Capabilities": cxt["Capabilities"],
