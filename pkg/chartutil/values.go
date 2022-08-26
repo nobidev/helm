@@ -232,7 +232,7 @@ func joinPath(path ...string) string { return strings.Join(path, ".") }
 func buildContext(cxt Values, chrt *chart.Chart) Values {
 	if rv, err := cxt.Table("Release"); err == nil {
 		rv = rv.MustClone()
-		rv["Name"] = chrt.FullName()
+		rv["Name"] = chrt.Name()
 		return Values{
 			"Chart":        chrt.Metadata,
 			"Capabilities": cxt["Capabilities"],
